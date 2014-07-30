@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eux
 
 # Build options read from application config (not sure if this is sane)
 BUILDPACK=`cat $3/SUBAPP_BUILDPACK`
