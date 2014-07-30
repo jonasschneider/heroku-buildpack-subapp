@@ -9,7 +9,7 @@ echo "=====> Compiling subapp '"$SUBAPP_PATH"'"
 
 
 # Throw out everything except the subapp
-storage=$(mktemp -t restofappXXXXX)
+storage=$(mktemp -d -t restofappXXXXX)
 shopt -s dotglob
 mv $1/* $storage
 mv $storage/$SUBAPP_PATH/* $1/
