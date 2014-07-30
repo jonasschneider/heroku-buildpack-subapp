@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eux
+set -e
 
 # Build options read from application config (not sure if this is sane)
 BUILDPACK=`cat $3/SUBAPP_BUILDPACK`
@@ -54,16 +54,17 @@ if [ "$url" != "" ]; then
 
   framework=$($dir/bin/detect $1)
 
-  if [ $? == 0 ]; then
-    echo "=====> Detected Framework: $framework"
-    $dir/bin/compile $1 $2 $3
+  if [ $? != 0 ]; then
+    echo "Buildpack did not detect sanely."
+    exit 1
+  fi
+  $dir/bin/compile $1 $2 $3
 
-    if [ $? != 0 ]; then
-      exit 1
-    fi
+  if [ $? != 0 ]; then
+    exit 1
+  fi
 
-    if [ -x $dir/bin/release ]; then
-      $dir/bin/release $1 > $1/last_pack_release.out
-    fi
+  if [ -x $dir/bin/release ]; then
+    $dir/bin/release $1 > $1/last_pack_release.out
   fi
 fi
