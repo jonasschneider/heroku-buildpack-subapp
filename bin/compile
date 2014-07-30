@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
-
 set -e
+
+# Build options read from application config (not sure if this is sane)
+BUILDPACK=`cat $3/SUBAPP_BUILDPACK`
+SUBAPP_PATH=`cat $3/SUBAPP_PATH`
+
+echo "=====> Compiling subapp '"$SUBAPP_PATH"'"
+
+
+# Throw out everything except the subapp
+storage=$(mktemp -t restofappXXXXX)
+rm -rf $storage
+shopt -s dotglob
+mv $1/* $storage
+mv $storage/$SUBAPP_PATH/* $1/
 
 function indent() {
   c='s/^/       /'
@@ -12,52 +25,46 @@ function indent() {
 
 unset GIT_DIR
 
-for BUILDPACK in $(cat $1/.buildpacks); do
-  dir=$(mktemp -t buildpackXXXXX)
-  rm -rf $dir
+dir=$(mktemp -t buildpackXXXXX)
+rm -rf $dir
 
-  url=${BUILDPACK%#*}
-  branch=${BUILDPACK#*#}
+url=${BUILDPACK%#*}
+branch=${BUILDPACK#*#}
 
-  if [ "$branch" == "$url" ]; then
-    branch=""
+if [ "$branch" == "$url" ]; then
+  branch=""
+fi
+
+if [ "$url" != "" ]; then
+  echo "       Downloading Buildpack: $url"
+
+  if [[ "$url" =~ \.tgz$ ]]; then
+    mkdir -p "$dir"
+    curl -s "$url" | tar xvz -C "$dir" >/dev/null 2>&1
+  else
+    git clone $url $dir >/dev/null 2>&1
+  fi
+  cd $dir
+
+  if [ "$branch" != "" ]; then
+    git checkout $branch >/dev/null 2>&1
   fi
 
-  if [ "$url" != "" ]; then
-    echo "=====> Downloading Buildpack: $url"
+  # we'll get errors later if these are needed and don't exist
+  chmod -f +x $dir/bin/{detect,compile,release} || true
 
-    if [[ "$url" =~ \.tgz$ ]]; then
-      mkdir -p "$dir"
-      curl -s "$url" | tar xvz -C "$dir" >/dev/null 2>&1
-    else
-      git clone $url $dir >/dev/null 2>&1
-    fi
-    cd $dir
+  framework=$($dir/bin/detect $1)
 
-    if [ "$branch" != "" ]; then
-      git checkout $branch >/dev/null 2>&1
+  if [ $? == 0 ]; then
+    echo "=====> Detected Framework: $framework"
+    $dir/bin/compile $1 $2 $3
+
+    if [ $? != 0 ]; then
+      exit 1
     fi
 
-    # we'll get errors later if these are needed and don't exist
-    chmod -f +x $dir/bin/{detect,compile,release} || true
-
-    framework=$($dir/bin/detect $1)
-
-    if [ $? == 0 ]; then
-      echo "=====> Detected Framework: $framework"
-      $dir/bin/compile $1 $2 $3
-
-      if [ $? != 0 ]; then
-        exit 1
-      fi
-
-      if [ -x $dir/bin/release ]; then
-        $dir/bin/release $1 > $1/last_pack_release.out
-      fi
+    if [ -x $dir/bin/release ]; then
+      $dir/bin/release $1 > $1/last_pack_release.out
     fi
   fi
-done
-
-if [ -e $1/last_pack_release.out ]; then
-  echo "Using release configuration from last framework ($framework)."
 fi
